@@ -1,0 +1,128 @@
+import os
+from flask import jsonify, request, Flask
+from flaskext.mysql import MySQL
+
+app = Flask(__name__)
+
+mysql = MySQL()
+
+# MySQL configurations
+app.config["MYSQL_DATABASE_USER"] = "root"
+app.config["MYSQL_DATABASE_PASSWORD"] = os.getenv("db_root_password")
+app.config["MYSQL_DATABASE_DB"] = os.getenv("db_name")
+app.config["MYSQL_DATABASE_HOST"] = os.getenv("MYSQL_SERVICE_HOST")
+app.config["MYSQL_DATABASE_PORT"] = int(os.getenv("MYSQL_SERVICE_PORT"))
+mysql.init_app(app)
+
+
+@app.route("/")
+def index():
+    return "Hello, world!"
+
+
+@app.route("/create", methods=["POST"])
+def add_user():
+    json = request.json
+    sabor = json["sabor"]
+    precio = json["precio"]
+
+    if sabor and precio and request.method == "POST":
+        sql = "INSERT INTO helados(sabor, precio) VALUES(%s, %s)"
+        data = (sabor, precio)
+        try:
+            conn = mysql.connect()
+            cursor = conn.cursor()
+            cursor.execute(sql, data)
+            conn.commit()
+            cursor.close()
+            conn.close()
+            resp = jsonify("Agregado exitosamente")
+            resp.status_code = 200
+            return resp
+        except Exception as exception:
+            return jsonify(str(exception))
+    else:
+        return jsonify("Ingrese sabor y precio")
+
+
+@app.route("/update/<int:id>", methods=["PUT"])
+def update_user(id):
+    json = request.json
+    sabor = json.get("sabor")
+    precio = json.get("precio")
+
+    if sabor is None and precio is None:
+        return jsonify("Ingrese al menos un campo para actualizar")
+
+    try:
+        conn = mysql.connect()
+        cursor = conn.cursor()
+        if sabor and precio:
+            cursor.execute(
+                "UPDATE helados SET sabor=%s, precio=%s WHERE id=%s",
+                (sabor, precio, id)
+            )
+        elif sabor:
+            cursor.execute("UPDATE helados SET sabor=%s WHERE id=%s", (sabor, id))
+        elif precio:
+            cursor.execute("UPDATE helados SET precio=%s WHERE id=%s", (precio, id))
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+        resp = jsonify("Helado actualizado correctamente")
+        resp.status_code = 200
+        return resp
+    except Exception as exception:
+        return jsonify(str(exception))
+
+
+@app.route("/helados", methods=["GET"])
+def get_helados():
+    try:
+        conn = mysql.connect()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM helados")
+        data = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return jsonify(data)
+    except Exception as exception:
+        return jsonify(str(exception))
+
+
+@app.route("/helados/<int:id>", methods=["GET"])
+def get_helado_by_id(id):
+    try:
+        conn = mysql.connect()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM helados WHERE id=%s", id)
+        data = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        if data:
+            return jsonify(data)
+        else:
+            return jsonify("Helado no encontrado")
+    except Exception as exception:
+        return jsonify(str(exception))
+
+
+@app.route("/delete/<int:id>", methods=["DELETE"])
+def delete_helado(id):
+    try:
+        conn = mysql.connect()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM helados WHERE id=%s", id)
+        conn.commit()
+        cursor.close()
+        conn.close()
+        resp = jsonify("Helado eliminado correctamente")
+        resp.status_code = 200
+        return resp
+    except Exception as exception:
+        return jsonify(str(exception))
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=80)
